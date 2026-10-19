@@ -53,7 +53,9 @@ type Expr =
   | { kind: "var"; name: string }
   | { kind: "add"; left: Expr; right: Expr }
   | { kind: "gt"; left: Expr; right: Expr }
-  | { kind: "if"; cond: Expr; then: Expr; else: Expr };
+  | { kind: "if"; cond: Expr; then: Expr; else: Expr }
+  | { kind: "sub"; left: Expr; right: Expr } //new rule
+  |{ kind: "mul"; left: Expr; right: Expr }; //new rule
 
 // ---------- Lexer: token rules (slide 7) and the tokenizer loop (slide 8) ----------
 type Token = { kind: string; text: string; pos: number };
@@ -67,6 +69,7 @@ const RULES: [string, RegExp][] = [
   [">",     />/y],
   ["(",     /\(/y],
   [")",     /\)/y],
+  ["-",     /\-/y], //new rule
 ];
 const KW = new Set(["if", "then", "else"]);
 
@@ -139,14 +142,24 @@ function parseCompare(p: Parser): Expr {
 }
 
 // sum = primary { "+" primary } ;
+
 function parseSum(p: Parser): Expr {
   let left = parsePrimary(p);
-  while (p.peek().kind === "+") {
-    p.next();
-    left = { kind: "add", left, right: parsePrimary(p) };
+
+  while (p.peek().kind === "+" || p.peek().kind === "-") {
+    const op = p.next().kind;
+    const right = parsePrimary(p);
+
+    if (op === "+") {
+      left = { kind: "add", left, right };
+    } else {
+      left = { kind: "sub", left, right };
+    }
   }
+
   return left;
 }
+
 
 // primary = INT | STRING | IDENT | "(" expr ")" ;
 function parsePrimary(p: Parser): Expr {
@@ -200,6 +213,12 @@ function check(e: Expr, env: Env): Type {
       const t2 = check(e.else, env);
       if (t1 !== t2) throw new CheckError(`if branches differ: then is ${t1}, else is ${t2}`);
       return t1;
+    }
+    case "sub":{
+      const l = check(e.left, env);
+      const r = check(e.right, env);
+      if (l === "int" && r === "int") return "int";
+      throw new CheckError(`'-' needs int - int, got ${l} - ${r}`);
     }
     default:
       return assertNever(e);
