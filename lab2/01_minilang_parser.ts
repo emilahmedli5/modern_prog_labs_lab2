@@ -55,7 +55,7 @@ type Expr =
   | { kind: "gt"; left: Expr; right: Expr }
   | { kind: "if"; cond: Expr; then: Expr; else: Expr }
   | { kind: "sub"; left: Expr; right: Expr } //new rule
-  |{ kind: "mul"; left: Expr; right: Expr }; //new rule
+  | { kind: "mul"; left: Expr; right: Expr }; //new rule
 
 // ---------- Lexer: token rules (slide 7) and the tokenizer loop (slide 8) ----------
 type Token = { kind: string; text: string; pos: number };
@@ -70,6 +70,7 @@ const RULES: [string, RegExp][] = [
   ["(",     /\(/y],
   [")",     /\)/y],
   ["-",     /\-/y], //new rule
+  ["*",     /\*/y], //new rule
 ];
 const KW = new Set(["if", "then", "else"]);
 
