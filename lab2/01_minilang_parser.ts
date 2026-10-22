@@ -144,12 +144,27 @@ function parseCompare(p: Parser): Expr {
 
 // sum = primary { "+" primary } ;
 
-function parseSum(p: Parser): Expr {
+
+function parseTerm(p: Parser): Expr {
   let left = parsePrimary(p);
+
+  while (p.peek().kind === "*") {
+    p.next();
+    const right = parsePrimary(p);
+    left = { kind: "mul", left, right };
+  }
+
+  return left;
+}
+
+
+
+function parseSum(p: Parser): Expr {
+  let left = parseTerm(p);
 
   while (p.peek().kind === "+" || p.peek().kind === "-") {
     const op = p.next().kind;
-    const right = parsePrimary(p);
+    const right = parseTerm(p);
 
     if (op === "+") {
       left = { kind: "add", left, right };
@@ -160,6 +175,7 @@ function parseSum(p: Parser): Expr {
 
   return left;
 }
+
 
 
 // primary = INT | STRING | IDENT | "(" expr ")" ;
