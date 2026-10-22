@@ -237,6 +237,14 @@ function check(e: Expr, env: Env): Type {
       if (l === "int" && r === "int") return "int";
       throw new CheckError(`'-' needs int - int, got ${l} - ${r}`);
     }
+    case "mul": {
+      const l = check(e.left, env);
+      const r = check(e.right, env);
+
+      if (l === "int" && r === "int") return "int";
+
+      throw new CheckError(`'*' needs int * int, got ${l} * ${r}`);
+}
     default:
       return assertNever(e);
   }
