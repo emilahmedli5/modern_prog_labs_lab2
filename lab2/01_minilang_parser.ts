@@ -55,7 +55,11 @@ type Expr =
   | { kind: "gt"; left: Expr; right: Expr }
   | { kind: "if"; cond: Expr; then: Expr; else: Expr }
   | { kind: "sub"; left: Expr; right: Expr } //new rule
-  | { kind: "mul"; left: Expr; right: Expr }; //new rule
+  | { kind: "mul"; left: Expr; right: Expr } //new rule
+  | { kind: "bool"; value: boolean } //new rule
+  | { kind: "neg"; operand: Expr } //new rule
+  | { kind: "ge"; left: Expr; right: Expr } //new rule
+  | { kind: "eq"; left: Expr; right: Expr }; //new rule
 
 // ---------- Lexer: token rules (slide 7) and the tokenizer loop (slide 8) ----------
 type Token = { kind: string; text: string; pos: number };
@@ -66,13 +70,15 @@ const RULES: [string, RegExp][] = [
   ["ident", /[A-Za-z_]\w*/y],
   ["str",   /"[^"]*"/y],
   ["+",     /\+/y],
-  [">",     />/y],
   ["(",     /\(/y],
   [")",     /\)/y],
   ["-",     /\-/y], //new rule
-  ["*",     /\*/y], //new rule
+  ["*",     /\*/y],//new rule
+  ["==", /==/y],//new rule
+  [">=", />=/y],//new rule
+  [">",     />/y],
 ];
-const KW = new Set(["if", "then", "else"]);
+const KW = new Set(["if", "then", "else", "true", "false"]);
 
 function tokenize(src: string): Token[] {
   const out: Token[] = [];
@@ -137,20 +143,24 @@ function parseExpr(p: Parser): Expr {
 // compare = sum [ ">" sum ] ;
 function parseCompare(p: Parser): Expr {
   const left = parseSum(p);
-  if (p.peek().kind !== ">") return left;
+  const k = p.peek().kind;
+  if (k !== ">" && k !== ">=" && k !== "==") return left;
   p.next();
-  return { kind: "gt", left, right: parseSum(p) };
+  const right = parseSum(p);
+  if (k === ">") return { kind: "gt", left, right };
+  if (k === ">=") return { kind: "ge", left, right };
+  return { kind: "eq", left, right };
 }
 
 // sum = primary { "+" primary } ;
 
 
 function parseTerm(p: Parser): Expr {
-  let left = parsePrimary(p);
+  let left = parseUnary(p);
 
   while (p.peek().kind === "*") {
     p.next();
-    const right = parsePrimary(p);
+    const right = parseUnary(p);
     left = { kind: "mul", left, right };
   }
 
@@ -185,9 +195,18 @@ function parsePrimary(p: Parser): Expr {
     case "int":   return { kind: "int", value: Number(t.text) };
     case "str":   return { kind: "str", value: t.text.slice(1, -1) };
     case "ident": return { kind: "var", name: t.text };
+    case "true":  return { kind: "bool", value: true };
+    case "false": return { kind: "bool", value: false };
     case "(": { const e = parseExpr(p); p.expect(")"); return e; }
     default: throw new Error(`unexpected ${t.kind} at ${t.pos}`);
   }
+}
+function parseUnary(p: Parser): Expr {
+  if (p.peek().kind === "-") {
+    p.next();
+    return { kind: "neg", operand: parseUnary(p) };
+  }
+  return parsePrimary(p);
 }
 
 // ---------- Type checker: the Lab 1 rules (Lecture 2) ----------
@@ -244,7 +263,27 @@ function check(e: Expr, env: Env): Type {
       if (l === "int" && r === "int") return "int";
 
       throw new CheckError(`'*' needs int * int, got ${l} * ${r}`);
-}
+    }
+    case "bool": {// T-Bool
+      return "bool";
+    }
+    case "neg": { // T-Neg
+      const t = check(e.operand, env);
+      if (t !== "int") throw new CheckError(`unary '-' needs int, got ${t}`);
+      return "int";
+    } 
+    case "ge": { // T-Ge
+      const l = check(e.left, env);
+      const r = check(e.right, env);
+      if (l !== "int" || r !== "int") throw new CheckError(`'>=' needs int >= int, got ${l} >= ${r}`);
+      return "bool";
+    }
+    case "eq": { // T-Eq: both sides must have the same type (int, string or bool)
+      const l = check(e.left, env);
+      const r = check(e.right, env);
+      if (l !== r) throw new CheckError(`'==' needs both sides of the same type, got ${l} == ${r}`);
+      return "bool";
+    }
     default:
       return assertNever(e);
   }
